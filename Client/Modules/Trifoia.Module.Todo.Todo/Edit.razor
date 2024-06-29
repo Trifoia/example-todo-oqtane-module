@@ -1,0 +1,133 @@
+@using Oqtane.Modules.Controls
+@using Trifoia.Module.Todo.Services
+@using Trifoia.Module.Todo.Models
+@using Oqtane
+
+@namespace Trifoia.Module.Todo.Todo
+@inherits ModuleBase
+@inject ITodoService TodoService
+@inject NavigationManager NavigationManager
+@inject IStringLocalizer<Index> Localizer
+@inject IStringLocalizer<SharedResources> SharedLocalizer
+
+<form @ref="form" class="@(validated ? " was-validated" : "needs-validation" )" novalidate>
+    <div class="container">
+        <div class="row mb-1 align-items-center">
+            <Label Class="col-sm-3" For="topic" HelpText="Enter a Topic" ResourceKey="Topic">Topic: </Label>
+            <div class="col-sm-9">
+                <input id="topic" class="form-control" @bind="@_topic" required />
+            </div>
+        </div>
+        <div class="row mb-1 align-items-center">
+            <Label Class="col-sm-3" For="done" HelpText="Select whether you want the Done is yes or no" ResourceKey="Done">Done? </Label>
+            <div class="col-sm-9">
+                <select id="done" class="form-select" @bind="@_done" >
+                    <option value="True">@SharedLocalizer["Yes"]</option>
+                    <option value="False">@SharedLocalizer["No"]</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    <button type="button" class="btn btn-success" @onclick="Save">@Localizer["Save"]</button>
+    <NavLink class="btn btn-secondary" href="@NavigateUrl()">@Localizer["Cancel"]</NavLink>
+    <br /><br />
+    @if (PageState.Action == "Edit")
+    {
+        <AuditInfo CreatedBy="@_createdby" CreatedOn="@_createdon" ModifiedBy="@_modifiedby" ModifiedOn="@_modifiedon"></AuditInfo>
+    }
+</form>
+
+@code {
+    // uncomment the following line to use Static render mode for this component
+    // public override string RenderMode => RenderModes.Static;
+    // uncomment the following line to Prerender on Server NOTE: This may effect SOE so should only be used in backend pages
+    // public override bool? Prerender => true
+
+    public override SecurityAccessLevel SecurityAccessLevel => SecurityAccessLevel.Edit;
+
+    public override string Actions => "Add,Edit";
+
+    public override string Title => "Manage Todo";
+
+    public override List<Resource> Resources => new List<Resource>()
+    {
+        new Resource { ResourceType = ResourceType.Stylesheet, Url = ModulePath() + "Module.css" }
+    };
+
+    private ElementReference form;
+    private bool validated = false;
+
+    private int _id;
+    private string _topic;
+    private string _done = "True";
+    private string _createdby;
+    private DateTime _createdon;
+    private string _modifiedby;
+    private DateTime _modifiedon;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            if (PageState.Action == "Edit")
+            {
+                _id = Int32.Parse(PageState.QueryString["id"]);
+                Todo todo = await TodoService.GetTodoAsync(_id, ModuleState.ModuleId);
+                if (todo != null)
+                {
+                    _topic = todo.Topic;
+                    _done = todo.Done.ToString();
+                    _createdby = todo.CreatedBy;
+                    _createdon = todo.CreatedOn;
+                    _modifiedby = todo.ModifiedBy;
+                    _modifiedon = todo.ModifiedOn;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error Loading Todo {Error}", ex.Message);
+            AddModuleMessage(Localizer["Message.LoadError"], MessageType.Error);
+        }
+    }
+
+    private async Task Save()
+    {
+        try
+        {
+            validated = true;
+            var interop = new Oqtane.UI.Interop(JSRuntime);
+            if (await interop.FormValid(form))
+            {
+                if (PageState.Action == "Add")
+                {
+                    Todo todo = new Todo();
+                    todo.ModuleId = ModuleState.ModuleId;
+                    todo.Topic = _topic;
+                    todo.Done = Boolean.Parse(_done);
+                    todo = await TodoService.AddTodoAsync(todo);
+                    await logger.LogInformation("Todo Added {Todo}", todo);
+                }
+                else
+                {
+                    Todo todo = await TodoService.GetTodoAsync(_id, ModuleState.ModuleId);
+                    todo.Topic = _topic;
+                    todo.Done = Boolean.Parse(_done);
+                    await TodoService.UpdateTodoAsync(todo);
+                    await logger.LogInformation("Todo Updated {Todo}", todo);
+                }
+                NavigationManager.NavigateTo(NavigateUrl());
+            }
+            else
+            {
+                AddModuleMessage(Localizer["Message.SaveValidation"], MessageType.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error Saving Todo {Error}", ex.Message);
+            AddModuleMessage(Localizer["Message.SaveError"], MessageType.Error);
+        }
+    }
+
+}

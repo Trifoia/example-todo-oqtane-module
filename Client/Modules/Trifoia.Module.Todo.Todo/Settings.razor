@@ -1,0 +1,58 @@
+@namespace Trifoia.Module.Todo.Todo
+@inherits ModuleBase
+@inject ISettingService SettingService
+@inject IStringLocalizer<Settings> Localizer
+
+<div class="container">
+    <div class="row mb-1 align-items-center">
+        <Label Class="col-sm-3" For="pageSize" HelpText="Select the number of items to display on a page" ResourceKey="PageSize">Page Size:</Label>
+        <div class="col-sm-9">
+            <select id="pageSize" class="form-select custom-select" @bind="@_pageSize">
+                <option value="10" selected>@Localizer["10"]</option>
+                <option value="50">@Localizer["50"]</option>
+                <option value="100">@Localizer["100"]</option>
+                <option value="500">@Localizer["500"]</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+@code {
+    // uncomment the following line to use Static render mode for this component
+    // public override string RenderMode => RenderModes.Static;
+    // uncomment the following line to Prerender on Server NOTE: This may effect SOE so should only be used in backend pages
+    // public override bool? Prerender => true
+
+    private string resourceType = "Trifoia.Module.Todo.Todo.Settings, Trifoia.Module.Todo.Oqtane"; // for localization
+    public override string Title => "TodoExample Todo Settings";
+
+    string _pageSize = "10";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Dictionary<string, string> settings = await SettingService.GetModuleSettingsAsync(ModuleState.ModuleId);
+            _pageSize = SettingService.GetSetting(settings, GetType().Namespace + ":PageSize", _pageSize);
+        }
+        catch (Exception ex)
+        {
+            AddModuleMessage(ex.Message, MessageType.Error);
+        }
+    }
+
+    public async Task UpdateSettings()
+    {
+        try
+        {
+            Dictionary<string, string> settings = await SettingService.GetModuleSettingsAsync(ModuleState.ModuleId);
+            SettingService.SetSetting(settings, GetType().Namespace + ":PageSize", _pageSize);
+            await SettingService.UpdateModuleSettingsAsync(settings, ModuleState.ModuleId);
+        }
+        catch (Exception ex)
+        {
+            AddModuleMessage(ex.Message, MessageType.Error);
+        }
+    }
+
+}

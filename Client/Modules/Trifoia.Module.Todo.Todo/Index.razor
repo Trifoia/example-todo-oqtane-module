@@ -1,0 +1,114 @@
+@using Trifoia.Module.Todo.Services
+@using Trifoia.Module.Todo.Models
+
+@namespace Trifoia.Module.Todo.Todo
+@inherits ModuleBase
+@inject ITodoService TodoService
+@inject ISettingService SettingService
+@inject NavigationManager NavigationManager
+@inject IStringLocalizer<Index> Localizer
+
+@if (_todos == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+
+    <div class="container">
+        <div class="row mb-1 align-items-center">
+            <div class="col-sm-4">
+                <ActionLink Action="Add" Security="SecurityAccessLevel.Edit" Text="Add Patient" ResourceKey="Add" />
+            </div>
+            <div class="col-sm-8">
+                <div class="row justify-content-end align-items-center">
+                    <Label Class="col-sm-2" For="pageSize" HelpText="Select the number of items to display on a page" ResourceKey="PageSize">Page Size:</Label>
+                    <div class="col-sm-2 justify-items-end">
+                        <select id="pageSize" class="form-select custom-select" @bind="@_pageSize">
+                            <option value="10" selected>@Localizer["10"]</option>
+                            <option value="50">@Localizer["50"]</option>
+                            <option value="100">@Localizer["100"]</option>
+                            <option value="500">@Localizer["500"]</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <br />
+    <br />
+    @if (@_todos.Count != 0)
+    {
+
+        <Pager Items="@_todos" PageSize="@_pageSize">
+            <Header>
+                <th style="width: 1px;">&nbsp;</th>
+                <th style="width: 1px;">&nbsp;</th>
+                <th>@Localizer["Topic"]</th>
+                <th>@Localizer["Done"]</th>
+            </Header>
+            <Row>
+                <td><ActionLink Action="Edit" Parameters="@($"id=" + context.TodoId.ToString())" ResourceKey="Edit"  /></td>
+                <td><ActionDialog Header="Delete Todo" Message="Are You Sure You Wish To Delete This Todo?" Action="Delete" Security="SecurityAccessLevel.Edit" Class="btn btn-danger" OnClick="@(async () => await Delete(context))" ResourceKey="Delete"  Id="@context.TodoId.ToString()" /></td>
+                <td>@context.Topic</td>
+                <td>@context.Done</td>
+            </Row>
+        </Pager>
+
+    }
+    else
+    {
+        <p>@Localizer["Message.DisplayNone"]</p>
+    }
+
+}
+
+@code {
+    // uncomment the following line to use Static render mode for this component
+    // public override string RenderMode => RenderModes.Static;
+    // uncomment the following line to Prerender on Server NOTE: This may effect SOE so should only be used in backend pages
+    // public override bool? Prerender => true
+
+    public override List<Resource> Resources => new List<Resource>()
+    {
+        new Resource { ResourceType = ResourceType.Stylesheet, Url = ModulePath() + "Module.css" },
+        new Resource { ResourceType = ResourceType.Script, Url = ModulePath() + "Module.js" }
+    };
+
+    List<Todo> _todos;
+
+    private string _pageSize = "10";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _todos = await TodoService.GetTodosAsync(ModuleState.ModuleId);
+
+            Dictionary<string, string> settings = await SettingService.GetModuleSettingsAsync(ModuleState.ModuleId);
+            _pageSize = SettingService.GetSetting(settings, GetType().Namespace + ":PageSize", _pageSize);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error Loading Todo {Error}", ex.Message);
+            AddModuleMessage(Localizer["Message.LoadError"], MessageType.Error);
+        }
+    }
+
+    private async Task Delete(Todo todo)
+    {
+        try
+        {
+            await TodoService.DeleteTodoAsync(todo.TodoId, ModuleState.ModuleId);
+            await logger.LogInformation("Todo Deleted {CodeGen}", todo);
+            _todos = await TodoService.GetTodosAsync(ModuleState.ModuleId);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error Deleting Todo {Todo} {Error}", todo, ex.Message);
+            AddModuleMessage(Localizer["Message.DeleteError"], MessageType.Error);
+        }
+    }
+
+}
